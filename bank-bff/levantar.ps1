@@ -2,7 +2,7 @@
 # Levanta los tres BFF y espera a que respondan.
 #
 # Uso:
-#   .\levantar.ps1                  # H2 en memoria, sin credenciales
+#   .\levantar.ps1                  # H2 en archivo, compartida, sin credenciales
 #   .\levantar.ps1 -Perfil oracle   # contra la base de la Experiencia 1
 #   .\levantar.ps1 -Detener         # los baja
 #
@@ -21,10 +21,10 @@ param(
     [switch]$Detener,
 
     # Perfil de Spring con el que arrancan los tres.
-    #   (vacio)  H2 en memoria, poblada con los CSV oficiales. Sin credenciales.
-    #   oracle   la Autonomous Database que poblo la Experiencia 1. Exige
-    #            $env:ORACLE_PASSWORD y deja a los tres BFF sobre la MISMA base,
-    #            con lo que un retiro del cajero si se ve desde web y movil.
+    #   (vacio)  H2 en archivo, UNA sola base para los tres, poblada con los
+    #            CSV oficiales. Sin credenciales ni infraestructura.
+    #   oracle   la Autonomous Database que poblo la Experiencia 1, con los
+    #            datos que dejo el batch. Exige $env:ORACLE_PASSWORD.
     [string]$Perfil = ""
 )
 
@@ -181,10 +181,28 @@ if ($previos.Count -gt 0) {
     Start-Sleep -Seconds 3
 }
 
+# Se borra la base H2 en archivo antes de cada corrida.
+#
+# Es en archivo -y no en memoria- para que los tres BFF compartan los MISMOS
+# datos; el precio de eso es que sobrevive entre ejecuciones, y sin borrarla la
+# segunda corrida arrancaria con el saldo que dejo el retiro de la primera. La
+# evidencia mostraria numeros distintos cada vez sin que nada haya cambiado en
+# el codigo, que es exactamente el tipo de ruido que ya costo caro antes.
+#
+# Solo aplica al perfil por defecto: con -Perfil oracle los datos son los que
+# dejo el batch de la Experiencia 1 y este script no los toca.
+if (-not $Perfil) {
+    $baseH2 = Join-Path $PSScriptRoot "basedatos"
+    if (Test-Path $baseH2) {
+        Remove-Item $baseH2 -Recurse -Force -ErrorAction SilentlyContinue
+        Write-Output "Base H2 anterior eliminada; se recarga el dataset oficial."
+    }
+}
+
 if ($Perfil) {
     Write-Output "Perfil: $Perfil"
 } else {
-    Write-Output "Perfil: (por defecto) H2 en memoria, una base por BFF"
+    Write-Output "Perfil: (por defecto) H2 en archivo, una sola base compartida"
 }
 Write-Output ""
 

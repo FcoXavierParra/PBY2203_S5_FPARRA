@@ -6,6 +6,9 @@
 *.docx
 *.pdf
 
+# La retroalimentacion del docente es de la entrega anterior y personal.
+S3_feedback_docente.txt
+
 # ---------------------------------------------------------------------------
 # CREDENCIALES - nunca deben salir del equipo
 # ---------------------------------------------------------------------------
@@ -60,24 +63,23 @@ Thumbs.db
 # ---------------------------------------------------------------------------
 # Salidas de ejecucion
 # ---------------------------------------------------------------------------
-# Los log de arranque de cada BFF quedan en el TEMP del sistema, no aqui. La
-# carpeta evidencias/ SI se versiona: es uno de los tres aspectos que exige la
-# seccion Entrega de las instrucciones.
+# Los log de arranque de cada BFF quedan en el TEMP del sistema, no aqui.
 *.log
+
+# La carpeta evidencias/ SI se versiona: es uno de los tres aspectos que exige
+# la seccion Entrega de las instrucciones.
 !evidencias/
 !evidencias/**
 
-# ...con UNA excepcion: la evidencia generada contra H2.
-#
-# H2 es el montaje sin infraestructura y cada BFF tiene su propia base, asi que
-# esa corrida muestra los tres canales sin ver los cambios de los otros. Es util
-# para desarrollar y no sirve como evidencia de la entrega: mostraria el patron
-# en su peor version por una limitacion del banco de pruebas.
-#
-# comparar_canales.ps1 detecta el perfil activo del log de arranque y nombra el
-# archivo segun el motor, de modo que esta regla se cumple sola.
-evidencias/*_h2.txt
-S3_feedback_docente.txt
+# ---------------------------------------------------------------------------
+# Base H2 en archivo
+# ---------------------------------------------------------------------------
+# La generan los BFF al arrancar, a partir de los CSV oficiales que ya estan en
+# el repositorio. Versionarla seria versionar una copia derivada, y ademas
+# quedaria congelada con los saldos de la ultima corrida.
+basedatos/
+*.mv.db
+*.trace.db
 
 
 # ---------------------------------------------------------------------------

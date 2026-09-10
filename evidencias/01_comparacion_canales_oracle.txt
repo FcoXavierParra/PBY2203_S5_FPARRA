@@ -1,0 +1,199 @@
+﻿==============================================================================
+ PATRON BFF - LA MISMA CUENTA POR LOS TRES CANALES
+==============================================================================
+ Fecha: 2026-09-10 11:57:22
+ Motor: Oracle Autonomous Database, una sola base para los tres BFF
+ Cuenta de prueba: 117
+
+==============================================================================
+ 1. CANAL WEB  (:8081)   autenticacion: JWT tras login de 'ejecutivo'
+==============================================================================
+
+--- GET /api/web/cuentas/117
+    campos de primer nivel : 13
+    tamano de la respuesta : 927 bytes
+    tiempo de respuesta    : 35,3 ms (mediana de 7)
+
+    {
+        "cuentaId":  117,
+        "titular":  "Diana Prince",
+        "tipoCuenta":  "prestamo",
+        "saldo":  12180,
+        "saldoFormateado":  "$12.180",
+        "edad":  30,
+        "segmentoEtario":  "adulto",
+        "cantidadMovimientos":  30,
+        "totalDepositos":  18000,
+        "totalRetiros":  2400,
+        "montoPromedio":  1230.00,
+        "observacionCalidad":  null,
+        "movimientosRecientes":  [
+                                     {
+                                         "id":  589,
+                                         "fecha":  "2024-12-30",
+                                         "monto":  800,
+                                         "montoFormateado":  "$800",
+                                         "tipo":  "debito",
+                                         "anomalia":  false,
+                                         "tipoDesconocido":  false
+                                     },
+                                     {
+                                         "id":  144,
+                                         "fecha":  "2024-12-30",
+                                         "monto":  3000,
+                                         "montoFormateado":  "$3.000",
+                                         "tipo":  "debito",
+                                         "anomalia":  true,
+                                         "tipoDesconocido":  false
+                                     },
+                                     {
+                                         "id":  33,
+                                         "fecha":  "2024-12-30",
+                                         "monto":  1500,
+                                         "montoFormateado":  "$1.500",
+                                         "tipo":  "credito",
+                                         "anomalia":  false,
+                                         "tipoDesconocido":  false
+                                     },
+                                     {
+                                         "id":  1000,
+                                         "fecha":  "2024-12-30",
+                                         "monto":  1500,
+                                         "montoFormateado":  "$1.500",
+                                         "tipo":  "credito",
+                                         "anomalia":  false,
+                                         "tipoDesconocido":  false
+                                     },
+                                     {
+                                         "id":  627,
+                                         "fecha":  "2024-12-29",
+                                         "monto":  700,
+                                         "montoFormateado":  "$700",
+                                         "tipo":  "credito",
+                                         "anomalia":  false,
+                                         "tipoDesconocido":  false
+                                     }
+                                 ]
+    }
+
+==============================================================================
+ 2. CANAL MOVIL  (:8082)   autenticacion: JWT tras registro del dispositivo
+==============================================================================
+
+--- GET /api/movil/cuentas/117/resumen
+    campos de primer nivel : 4
+    tamano de la respuesta : 318 bytes
+    tiempo de respuesta    : 25,9 ms (mediana de 7)
+
+    {
+        "cuentaId":  117,
+        "saldo":  12180,
+        "moneda":  "CLP",
+        "ultimos":  [
+                        {
+                            "fecha":  "2024-12-30",
+                            "monto":  800,
+                            "tipo":  "debito"
+                        },
+                        {
+                            "fecha":  "2024-12-30",
+                            "monto":  3000,
+                            "tipo":  "debito"
+                        },
+                        {
+                            "fecha":  "2024-12-30",
+                            "monto":  1500,
+                            "tipo":  "credito"
+                        },
+                        {
+                            "fecha":  "2024-12-30",
+                            "monto":  1500,
+                            "tipo":  "credito"
+                        },
+                        {
+                            "fecha":  "2024-12-29",
+                            "monto":  700,
+                            "tipo":  "credito"
+                        }
+                    ]
+    }
+
+==============================================================================
+ 3. CANAL CAJERO  (:8083)   autenticacion: terminal + PIN, y JWT de 2 min
+==============================================================================
+
+    Sesion abierta, vence en 120 s
+
+--- GET /api/cajero/saldo
+    campos de primer nivel : 2
+    tamano de la respuesta : 40 bytes
+    tiempo de respuesta    : 11,2 ms (mediana de 7)
+
+    {
+        "saldoDisponible":  12180,
+        "moneda":  "CLP"
+    }
+
+==============================================================================
+ COMPARACION
+==============================================================================
+
+  canal          bytes   vs. web    tiempo   para que sirve
+  --------------------------------------------------------------------------
+  web              927     100 %     35,3 ms   ficha completa con agregados
+  movil            318       34%     25,9 ms   saldo y ultimos movimientos
+  cajero            40        4%     11,2 ms   solo saldo disponible
+
+  Los tres leen la MISMA cuenta del mismo modulo de dominio. La diferencia
+  esta enteramente en el BFF: que consulta, que agrega y que expone.
+
+==============================================================================
+ SUPERFICIE EXPUESTA POR CANAL
+==============================================================================
+
+  web    -> estado anual (existe)                      responde
+  movil  -> estado anual (no existe)                   HTTP 403
+  cajero -> listado de cuentas (no existe)             HTTP 403
+  movil  -> sin token de dispositivo                   HTTP 403
+  cajero -> sin sesion, solo terminal                  HTTP 403
+
+==============================================================================
+ INVENTARIO DE APIS - cada endpoint de los tres BFF
+==============================================================================
+
+  canal  endpoint                                   estado       bytes  autenticacion
+  ----------------------------------------------------------------------------------------------------
+  web    GET  /api/web/cuentas                      200 OK       45802  JWT web (rol EJECUTIVO)
+  web    GET  /api/web/cuentas/{id}                 200 OK         927  JWT web
+  web    GET  /api/web/cuentas/{id}/estado-anual    200 OK        2884  JWT web
+  web    GET  /api/web/transacciones                200 OK        1384  JWT web
+  movil  GET  /api/movil/cuentas/{id}/resumen       200 OK         318  JWT movil
+  movil  GET  /api/movil/cuentas/{id}/movimientos   200 OK         262  JWT movil
+  cajero POST /api/cajero/sesion                    200 OK         252  terminal + PIN -> JWT
+  cajero GET  /api/cajero/saldo                     200 OK          40  terminal + JWT cajero
+  cajero POST /api/cajero/retiro                    HTTP 400         0  terminal + JWT cajero
+
+  Nueve endpoints en total: cuatro del canal web, dos del movil y tres del
+  cajero. La cantidad no es casual y es en si misma parte de la evidencia:
+  el canal con mas superficie es el que corre en un equipo de confianza, y el
+  que entrega dinero en la calle expone lo minimo para operar.
+
+  El 400 del retiro es la respuesta ESPERADA y no un fallo: este inventario lo
+  prueba con un monto no dispensable a proposito. Su objetivo es acreditar que
+  el endpoint existe y autentica, no repetir la demostracion funcional que
+  viene a continuacion; con un monto valido consumiria el saldo de la cuenta y
+  dejaria sin caso exitoso a esa demostracion, que es donde el rechazo y la
+  autorizacion se ven juntos.
+
+==============================================================================
+ OPERACION CRITICA: RETIRO (solo el canal cajero)
+==============================================================================
+
+  monto no dispensable (7.500)               HTTP 400
+  sobre el tope de la operacion (300.000)    HTTP 400
+  monto valido (10.000)                      AUTORIZADO             saldo restante: 2180
+
+  Las dos primeras reglas -multiplo de 10.000 y tope por operacion- son del
+  CANAL y viven en el BFF del cajero. La validacion de saldo suficiente es del
+  BANCO y vive en el modulo comun: cualquier canal futuro la hereda, mientras
+  que las del cajero no se le imponen a nadie mas.

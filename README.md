@@ -230,8 +230,10 @@ mostrarían datos distintos para el mismo dataset.
 - JDK 17 o superior (probado con Temurin 21)
 - Maven 3.9+
 
-No hace falta base de datos ni Docker: cada BFF levanta su propia H2 en memoria y la puebla
-con el dataset oficial al arrancar.
+No hace falta base de datos ni Docker: los tres BFF comparten **una sola** H2 en archivo, que
+el primero en arrancar puebla con el dataset oficial y los otros dos encuentran ya lista.
+`levantar.ps1` la borra antes de cada corrida, para que toda ejecución parta de los mismos
+datos y no del saldo que dejó la anterior.
 
 ```powershell
 mvn install -DskipTests
@@ -293,23 +295,37 @@ intentos de login, y Autonomous Database bloquea la cuenta `ADMIN` a los diez.
 
 | | perfil por defecto | perfil `oracle` |
 |---|---|---|
-| base de datos | una H2 en memoria **por BFF** | **una sola** Autonomous Database |
+| base de datos | **una sola** H2 en archivo, compartida | **una sola** Autonomous Database |
 | origen de los datos | los CSV oficiales, al arrancar | lo que dejó el batch de la Experiencia 1 |
 | requisitos | ninguno | credenciales de Oracle |
-| retiro del cajero | visible solo en su propia copia | **visible desde los tres canales** |
+| retiro del cajero | **visible desde los tres canales** | **visible desde los tres canales** |
 | `saldo_final`, `anomalia` | vacíos: ningún batch los calculó | calculados por la Experiencia 1 |
 
 El montaje por defecto existe para que el proyecto se pueda clonar y ejecutar sin
-infraestructura previa, y por eso cada BFF tiene su propia copia de los datos. **Esa separación
-es del montaje, no del patrón**: BFF separa la capa que sirve a cada frontend, no el
-almacenamiento.
+infraestructura previa. Lo que cambia entre los dos perfiles es **de dónde salen los datos**,
+no cómo se reparte el trabajo entre los canales: en ambos los tres BFF leen la misma base, y la
+comparación entre ellos da lo mismo.
+
+Que compartan base **no rompe el patrón**. Lo que BFF separa es la capa que sirve a cada
+frontend —qué consulta, qué agrega, qué expone, cómo autentica—, no el almacenamiento; si
+tampoco compartieran datos serían tres sistemas distintos y no tres fachadas del mismo banco.
+
+En una versión anterior cada BFF levantaba su propia H2 **en memoria**, y eso tenía una
+consecuencia que arruinaba la demostración: un retiro hecho por el cajero no se veía desde la
+web ni desde el móvil, porque eran tres copias separadas de los mismos datos. La H2 en archivo
+con `AUTO_SERVER` —tres procesos abren el mismo archivo y el primero hace de servidor— quita
+esa limitación sin agregar un solo requisito de instalación.
 
 ### Los saldos cambian al generar evidencia, y está bien
 
 `comparar_canales.ps1` ejecuta un **retiro real** para evidenciar el endpoint del cajero, así
-que cada corrida deja la cuenta usada con $10.000 menos. Con el perfil por defecto no se nota:
-la base es en memoria y vuelve a su estado original en cada arranque. Contra Oracle persiste,
-porque es una base de verdad.
+que cada corrida deja la cuenta usada con $10.000 menos. Que ese débito **quede** es justamente
+lo que permite demostrar la coherencia entre canales: web y móvil informan el saldo nuevo sin
+que nadie los haya notificado.
+
+Con el perfil por defecto la base vuelve a su estado original en cada arranque, porque
+`levantar.ps1` borra el archivo antes de lanzar los tres. Contra Oracle persiste, porque es una
+base de verdad.
 
 No se incluye un script de repoblación, y es deliberado: los datos de Oracle los produce el
 batch de la Experiencia 1, que además de cargarlos calcula intereses y marcas de anomalía. Un
@@ -322,15 +338,36 @@ corrección.
 
 En `evidencias/`:
 
-| archivo | contenido |
-|---|---|
-| `01_comparacion_canales_<motor>.txt` | la misma cuenta por los tres canales con tamaño y tiempo, la superficie expuesta, el inventario de las nueve APIs y los tres casos del retiro |
+| archivo | motor | qué aporta |
+|---|---|---|
+| `01_comparacion_canales_oracle.txt` | Autonomous Database | la **continuidad con la Experiencia 1**: los saldos traen los intereses ya aplicados y los agregados anuales vienen calculados por el batch, no por el BFF |
+| `01_comparacion_canales_h2.txt` | H2 en archivo | la corrida **reproducible sin credenciales**, con la sección de coherencia entre canales |
+
+Ambos archivos contienen lo mismo en estructura: la misma cuenta por los tres canales con
+tamaño y tiempo de respuesta, la superficie expuesta, el inventario de las nueve APIs y los
+tres casos del retiro. Se incluyen los dos a propósito, porque prueban cosas distintas: el de
+Oracle que el sistema se apoya en datos reales producidos por la entrega anterior, y el de H2
+que cualquiera puede reproducir la comparación completa clonando el repositorio.
+
+La diferencia visible entre ambos está en los campos que el batch calcula. Contra Oracle,
+`cantidadMovimientos` es 30 y `totalDepositos` 18.000; contra H2 los dos son 0, porque ningún
+batch corrió sobre esa base. Los BFF **sirven** ese cálculo, no lo rehacen.
 
 **El nombre lleva el motor, y no es decorativo.** `comparar_canales.ps1` detecta el perfil
 activo leyendo el log de arranque —no lo declara a mano— y nombra el archivo según lo que
-encontró. La variante `_h2` está en `.gitignore`, porque en ese montaje cada BFF tiene su
-propia base y la corrida mostraría los tres canales sin ver los cambios de los otros: sería
-exhibir el patrón en su peor versión por una limitación del banco de pruebas.
+encontró. Así queda escrito en la evidencia misma contra qué motor corrió, sin que nadie lo
+tenga que afirmar aparte.
+
+La sección que cierra el argumento del patrón es **Coherencia entre canales**: el cajero debita
+$10.000 y acto seguido se le pregunta el saldo a los tres. Los tres responden lo mismo, cada
+uno con su propia forma —el web dentro de una ficha de 13 campos con agregados anuales, el
+móvil dentro de un resumen de 4, el cajero solo, en 43 bytes—. **El dato es uno; la
+representación es del canal.**
+
+Esa sección aparece en `01_comparacion_canales_h2.txt` y no en el de Oracle, que se generó
+antes de agregarla. Volver a producirlo es un comando —`.\levantar.ps1 -Perfil oracle` y
+`.\comparar_canales.ps1`—, pero exige las credenciales, y la evidencia contra Oracle ya prueba
+lo que le toca probar: que los datos vienen del batch de la Experiencia 1.
 
 ### Sobre los tiempos de respuesta
 

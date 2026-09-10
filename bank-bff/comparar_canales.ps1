@@ -74,12 +74,14 @@ public class AceptarCertificadoLocal : ICertificatePolicy {
 
 # Motor real contra el que corrieron los BFF, leido del log de arranque y no
 # declarado a mano: Spring Boot registra el perfil activo al iniciar. El nombre
-# del archivo de evidencia lo lleva incorporado, y .gitignore excluye el de H2.
+# del archivo de evidencia lo lleva incorporado, de modo que la propia evidencia
+# dice contra que motor corrio sin que nadie lo tenga que afirmar aparte.
 #
-# El motivo es concreto: H2 es el montaje sin infraestructura, con una base por
-# BFF, asi que su evidencia muestra los tres canales SIN ver los cambios de los
-# otros. Publicar eso como evidencia de la entrega seria mostrar el patron en su
-# peor version por una limitacion del banco de pruebas, no del diseno.
+# Los dos montajes son igualmente validos como evidencia, y lo son desde que la
+# H2 dejo de ser una base POR BFF y paso a ser una sola compartida: mientras
+# cada uno tenia la suya, la corrida H2 mostraba los tres canales sin ver los
+# cambios de los otros, y eso exhibia el patron en su peor version por una
+# limitacion del banco de pruebas y no del diseno.
 $logArranque = Join-Path $env:TEMP "bff-web.log"
 $motor = "h2"
 if (Test-Path $logArranque) {
@@ -148,7 +150,7 @@ Registrar "=====================================================================
 Registrar " PATRON BFF - LA MISMA CUENTA POR LOS TRES CANALES"
 Registrar "=============================================================================="
 Registrar (" Fecha: {0}" -f (Get-Date -Format "yyyy-MM-dd HH:mm:ss"))
-Registrar (" Motor: {0}" -f $(if ($motor -eq "oracle") { "Oracle Autonomous Database, una sola base para los tres BFF" } else { "H2 en memoria, una base POR BFF (montaje sin infraestructura)" }))
+Registrar (" Motor: {0}" -f $(if ($motor -eq "oracle") { "Oracle Autonomous Database, una sola base para los tres BFF" } else { "H2 en archivo, una sola base compartida por los tres BFF (montaje sin infraestructura)" }))
 
 # --- 0. Elegir una cuenta que exista ---------------------------------------
 
@@ -412,6 +414,7 @@ foreach ($caso in @(
     try {
         $r = Invoke-RestMethod -Uri "$CAJERO/api/cajero/retiro" -Method Post `
              -Headers $cabecerasSesion -Body $cuerpo -ErrorAction Stop
+        if ($caso.requiereFondos) { $script:montoRetirado = $caso.monto; $script:saldoTrasRetiro = [decimal]$r.saldoRestante }
         Registrar ("  {0,-42} {1,-22} saldo restante: {2}" -f $caso.etiqueta, $r.codigo, $r.saldoRestante)
     } catch {
         $detalle = $null
@@ -425,6 +428,72 @@ Registrar "  Las dos primeras reglas -multiplo de 10.000 y tope por operacion- s
 Registrar "  CANAL y viven en el BFF del cajero. La validacion de saldo suficiente es del"
 Registrar "  BANCO y vive en el modulo comun: cualquier canal futuro la hereda, mientras"
 Registrar "  que las del cajero no se le imponen a nadie mas."
+
+# --- 8. Coherencia entre canales -------------------------------------------
+#
+# La prueba de que los tres BFF son capas sobre UN MISMO backend y no tres
+# aplicaciones que casualmente muestran datos parecidos.
+#
+# El cajero acaba de debitar la cuenta. Si web y movil informan el saldo nuevo
+# -sin que nadie los haya notificado- es porque los tres leen la misma fila.
+# Esta seccion no existia mientras cada BFF tenia su propia H2 en memoria: alli
+# habria mostrado tres saldos distintos, que es lo contrario de lo que hay que
+# demostrar.
+
+Registrar ""
+Registrar "=============================================================================="
+Registrar " COHERENCIA ENTRE CANALES: UN RETIRO, TRES VISTAS"
+Registrar "=============================================================================="
+Registrar ""
+
+if ($null -eq $script:montoRetirado) {
+
+    Registrar "  No hubo retiro autorizado en esta corrida, asi que no hay cambio que"
+    Registrar "  propagar. La comparacion se omite en vez de mostrar tres saldos iguales"
+    Registrar "  que no probarian nada."
+
+} else {
+
+    # Sesion nueva: la anterior la revoco el propio retiro al entregar el dinero.
+    # Que haya que abrirla otra vez es, de paso, la revocacion funcionando.
+    $sesionLectura = Invoke-RestMethod -Uri "$CAJERO/api/cajero/sesion" -Method Post `
+        -Headers $cabecerasTerminal -Body (@{ cuentaId = $CuentaId; pin = $Pin } | ConvertTo-Json -Compress)
+    $cabecerasLectura = @{
+        "X-ATM-Terminal" = $ClaveTerminal
+        "Authorization"  = "Bearer $($sesionLectura.token)"
+    }
+
+    $saldoWeb    = [decimal](Invoke-RestMethod -Uri "$WEB/api/web/cuentas/$CuentaId" -Headers $cabecerasWeb).saldo
+    $saldoMovil  = [decimal](Invoke-RestMethod -Uri "$MOVIL/api/movil/cuentas/$CuentaId/resumen" -Headers $cabecerasMovil).saldo
+    $saldoCajero = [decimal](Invoke-RestMethod -Uri "$CAJERO/api/cajero/saldo" -Headers $cabecerasLectura).saldoDisponible
+
+    Registrar ("  Retiro efectuado por el cajero: {0:N0}" -f $script:montoRetirado)
+    Registrar ("  Saldo antes / despues        : {0:N0}  ->  {1:N0}" -f $saldoActual, $script:saldoTrasRetiro)
+    Registrar ""
+    Registrar ("  {0,-8} {1,-46} {2,12}" -f "canal", "endpoint consultado DESPUES del retiro", "saldo")
+    Registrar ("  " + ("-" * 68))
+    Registrar ("  {0,-8} {1,-46} {2,12:N0}" -f "web",    "GET /api/web/cuentas/$CuentaId",           $saldoWeb)
+    Registrar ("  {0,-8} {1,-46} {2,12:N0}" -f "movil",  "GET /api/movil/cuentas/$CuentaId/resumen", $saldoMovil)
+    Registrar ("  {0,-8} {1,-46} {2,12:N0}" -f "cajero", "GET /api/cajero/saldo",                    $saldoCajero)
+    Registrar ""
+
+    $coinciden = ($saldoWeb -eq $saldoMovil) -and ($saldoMovil -eq $saldoCajero)
+
+    if ($coinciden) {
+        Registrar "  Los tres coinciden. Ninguno de los BFF sabe de la existencia de los otros"
+        Registrar "  dos: lo que comparten es el modulo de dominio y la base, y cada uno decide"
+        Registrar "  por su cuenta cuanto de eso expone y con que forma. Eso es el patron."
+    } else {
+        Registrar "  ATENCION: los saldos NO coinciden. Con la base compartida no deberia"
+        Registrar "  ocurrir; revisar que los tres BFF esten sobre el mismo motor."
+    }
+
+    Registrar ""
+    Registrar "  Notese que cada canal lo informa a SU manera y no todos exponen lo mismo:"
+    Registrar "  el web lo entrega dentro de una ficha de 13 campos con agregados anuales,"
+    Registrar "  el movil dentro de un resumen de 4, y el cajero solo, en 43 bytes. El dato"
+    Registrar "  es uno; la representacion es del canal."
+}
 
 # --- Guardar ---------------------------------------------------------------
 
