@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>cl.duoc.bank</groupId>
+        <artifactId>bank-bff</artifactId>
+        <version>0.0.1-SNAPSHOT</version>
+    </parent>
+
+    <artifactId>bank-seguridad</artifactId>
+    <name>bank-seguridad</name>
+    <description>
+        Emision y validacion de tokens JWT, compartida por los tres BFF.
+
+        Es infraestructura transversal, no dominio: por eso no vive en bank-core, que
+        modela cuentas y transacciones y no sabe nada de canales ni de credenciales.
+        Tampoco vive dentro de un BFF, porque los tres la necesitan y duplicarla haria
+        que se desincronizaran.
+
+        Lo que este modulo NO decide es tan importante como lo que decide: no fija quien
+        puede emitir un token, ni con que clave, ni cuanto dura. Eso lo configura cada
+        BFF, y es lo que permite que los canales tengan politicas distintas sobre el
+        mismo mecanismo.
+    </description>
+
+    <dependencies>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-api</artifactId>
+            <version>0.12.6</version>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-impl</artifactId>
+            <version>0.12.6</version>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-jackson</artifactId>
+            <version>0.12.6</version>
+            <scope>runtime</scope>
+        </dependency>
+        <!-- El filtro que valida el token es un servlet filter de Spring Security,
+             asi que este modulo necesita ambos starters. Es la unica concesion:
+             una libreria de seguridad que ofrece un filtro tiene que conocer el
+             contenedor donde se instala. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <skip>true</skip>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+</project>

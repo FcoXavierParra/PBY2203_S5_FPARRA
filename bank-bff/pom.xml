@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>3.5.3</version>
+        <relativePath/>
+    </parent>
+
+    <groupId>cl.duoc.bank</groupId>
+    <artifactId>bank-bff</artifactId>
+    <version>0.0.1-SNAPSHOT</version>
+    <packaging>pom</packaging>
+
+    <name>bank-bff</name>
+    <description>
+        PBY2203 Exp2 S4 - Patron Backend for Frontend sobre los datos del Banco XYZ.
+
+        La estrategia elegida es "backends independientes por cada tipo de cliente": tres
+        aplicaciones Spring Boot que se despliegan y ejecutan por separado, cada una con sus
+        propios endpoints, sus propios DTO y su propia configuracion de seguridad, sobre un
+        modulo de dominio comun.
+
+        Por que multi-modulo y no tres repositorios sueltos: la guia dice que esta estrategia
+        "puede traducirse en repositorios completamente independientes" -puede, no debe-. Lo
+        que el patron exige es que cada cliente tenga su propio backend desplegable, y eso se
+        cumple: son tres jar ejecutables, en tres puertos, que se levantan y caen por separado.
+        Tres repositorios agregarian friccion de revision sin agregar nada demostrable, y el
+        enunciado ademas pide entregar todo en una misma carpeta comprimida.
+    </description>
+
+    <modules>
+        <!-- Dominio compartido: entidades, repositorios y servicios de consulta.
+             NO contiene nada especifico de un canal: si algo solo le sirve a un
+             cliente, vive en su BFF. Esa es la linea que mantiene honesta la
+             separacion. -->
+        <module>bank-core</module>
+
+        <!-- Emision y validacion de JWT. Transversal a los tres canales, pero
+             cada uno la configura con SU clave, SU emisor y SU duracion. -->
+        <module>bank-seguridad</module>
+
+        <!-- Un modulo por cliente. Cada uno es una aplicacion Spring Boot completa. -->
+        <module>bff-web</module>
+        <module>bff-movil</module>
+        <module>bff-cajero</module>
+    </modules>
+
+    <properties>
+        <java.version>17</java.version>
+    </properties>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>cl.duoc.bank</groupId>
+                <artifactId>bank-core</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>cl.duoc.bank</groupId>
+                <artifactId>bank-seguridad</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <dependencies>
+        <!-- Lombok en todos los modulos: reduce el ruido de getters y constructores
+             en DTO, que en este proyecto son muchos y muy parecidos entre si. -->
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <pluginManagement>
+            <plugins>
+                <plugin>
+                    <groupId>org.springframework.boot</groupId>
+                    <artifactId>spring-boot-maven-plugin</artifactId>
+                    <configuration>
+                        <excludes>
+                            <exclude>
+                                <groupId>org.projectlombok</groupId>
+                                <artifactId>lombok</artifactId>
+                            </exclude>
+                        </excludes>
+                    </configuration>
+                </plugin>
+            </plugins>
+        </pluginManagement>
+    </build>
+</project>
