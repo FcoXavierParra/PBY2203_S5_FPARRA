@@ -340,8 +340,8 @@ En `evidencias/`:
 
 | archivo | motor | qué aporta |
 |---|---|---|
-| `01_comparacion_canales_oracle.txt` | Autonomous Database | la **continuidad con la Experiencia 1**: los saldos traen los intereses ya aplicados y los agregados anuales vienen calculados por el batch, no por el BFF |
-| `01_comparacion_canales_h2.txt` | H2 en archivo | la corrida **reproducible sin credenciales**, con la sección de coherencia entre canales |
+| `01_comparacion_canales_oracle.txt` | Autonomous Database | la **continuidad con la Experiencia 1**: sirve las filas que dejó el batch, con los intereses ya aplicados al `saldo_final` |
+| `01_comparacion_canales_h2.txt` | H2 en archivo | la corrida **reproducible sin credenciales**: basta clonar el repositorio y ejecutar dos comandos |
 
 Ambos archivos contienen lo mismo en estructura: la misma cuenta por los tres canales con
 tamaño y tiempo de respuesta, la superficie expuesta, el inventario de las nueve APIs y los
@@ -349,9 +349,23 @@ tres casos del retiro. Se incluyen los dos a propósito, porque prueban cosas di
 Oracle que el sistema se apoya en datos reales producidos por la entrega anterior, y el de H2
 que cualquiera puede reproducir la comparación completa clonando el repositorio.
 
-La diferencia visible entre ambos está en los campos que el batch calcula. Contra Oracle,
-`cantidadMovimientos` es 30 y `totalDepositos` 18.000; contra H2 los dos son 0, porque ningún
-batch corrió sobre esa base. Los BFF **sirven** ese cálculo, no lo rehacen.
+La diferencia entre ambos no está en la forma de las respuestas —es la misma— sino en **de
+dónde salen las filas**, y se ve en los totales que cada montaje reporta al arrancar:
+
+| | `CUENTA` | `TRANSACCION` | `MOVIMIENTO_ANUAL` |
+|---|---|---|---|
+| Oracle | 50 | 401 | 862 |
+| H2 | 50 | 631 | 952 |
+
+Las de Oracle las dejó el batch de la Experiencia 1, que además de cargarlas descartó las filas
+irrecuperables y aplicó los intereses al `saldo_final`. Las de H2 las carga `CargadorDatos`
+desde los mismos CSV al arrancar, con su propio saneamiento. Por eso Oracle tiene menos: pasó
+por un filtro más.
+
+En los dos casos los agregados anuales —`cantidadMovimientos`, `totalDepositos`,
+`montoPromedio`— vienen **leídos** de `MOVIMIENTO_ANUAL`, no calculados por el BFF en cada
+petición. Es la continuidad con la Experiencia 1: el trabajo pesado ya se hizo por lotes y
+estos tres backends se limitan a servirlo con la forma que cada canal necesita.
 
 **El nombre lleva el motor, y no es decorativo.** `comparar_canales.ps1` detecta el perfil
 activo leyendo el log de arranque —no lo declara a mano— y nombra el archivo según lo que
@@ -361,13 +375,18 @@ tenga que afirmar aparte.
 La sección que cierra el argumento del patrón es **Coherencia entre canales**: el cajero debita
 $10.000 y acto seguido se le pregunta el saldo a los tres. Los tres responden lo mismo, cada
 uno con su propia forma —el web dentro de una ficha de 13 campos con agregados anuales, el
-móvil dentro de un resumen de 4, el cajero solo, en 43 bytes—. **El dato es uno; la
-representación es del canal.**
+móvil dentro de un resumen de 4, el cajero solo, en poco más de 40 bytes—. **El dato es uno;
+la representación es del canal.**
 
-Esa sección aparece en `01_comparacion_canales_h2.txt` y no en el de Oracle, que se generó
-antes de agregarla. Volver a producirlo es un comando —`.\levantar.ps1 -Perfil oracle` y
-`.\comparar_canales.ps1`—, pero exige las credenciales, y la evidencia contra Oracle ya prueba
-lo que le toca probar: que los datos vienen del batch de la Experiencia 1.
+Los dos archivos la traen, generados por la misma versión del script y con pocos minutos de
+diferencia. Reproducirlos es un comando cada uno: `.\levantar.ps1` y `.\comparar_canales.ps1`
+para el de H2, lo mismo con `-Perfil oracle` para el otro.
+
+**La cuenta de prueba no se elige por saldo, sino por tener agregados.** Ordenar solo por saldo
+caía en cuentas sin fila en `MOVIMIENTO_ANUAL`, y la ficha del canal web salía con
+`cantidadMovimientos` en cero: parecía que el BFF no tenía de dónde sacarlos, cuando el punto
+es exactamente el contrario. El criterio pide saldo suficiente para que el retiro se demuestre
+autorizado **y** agregados presentes, y ordena por estos últimos.
 
 ### Sobre los tiempos de respuesta
 

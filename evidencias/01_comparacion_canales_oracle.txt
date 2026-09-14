@@ -1,31 +1,31 @@
 ﻿==============================================================================
  PATRON BFF - LA MISMA CUENTA POR LOS TRES CANALES
 ==============================================================================
- Fecha: 2026-09-10 11:57:22
+ Fecha: 2026-09-14 10:18:36
  Motor: Oracle Autonomous Database, una sola base para los tres BFF
- Cuenta de prueba: 117
+ Cuenta de prueba: 107
 
 ==============================================================================
  1. CANAL WEB  (:8081)   autenticacion: JWT tras login de 'ejecutivo'
 ==============================================================================
 
---- GET /api/web/cuentas/117
+--- GET /api/web/cuentas/107
     campos de primer nivel : 13
     tamano de la respuesta : 927 bytes
-    tiempo de respuesta    : 35,3 ms (mediana de 7)
+    tiempo de respuesta    : 31,3 ms (mediana de 7)
 
     {
-        "cuentaId":  117,
-        "titular":  "Diana Prince",
+        "cuentaId":  107,
+        "titular":  "Steve Rogers",
         "tipoCuenta":  "prestamo",
-        "saldo":  12180,
-        "saldoFormateado":  "$12.180",
-        "edad":  30,
-        "segmentoEtario":  "adulto",
-        "cantidadMovimientos":  30,
-        "totalDepositos":  18000,
-        "totalRetiros":  2400,
-        "montoPromedio":  1230.00,
+        "saldo":  10150,
+        "saldoFormateado":  "$10.150",
+        "edad":  25,
+        "segmentoEtario":  "joven",
+        "cantidadMovimientos":  54,
+        "totalDepositos":  29700,
+        "totalRetiros":  35700,
+        "montoPromedio":  1622.22,
         "observacionCalidad":  null,
         "movimientosRecientes":  [
                                      {
@@ -80,14 +80,14 @@
  2. CANAL MOVIL  (:8082)   autenticacion: JWT tras registro del dispositivo
 ==============================================================================
 
---- GET /api/movil/cuentas/117/resumen
+--- GET /api/movil/cuentas/107/resumen
     campos de primer nivel : 4
     tamano de la respuesta : 318 bytes
-    tiempo de respuesta    : 25,9 ms (mediana de 7)
+    tiempo de respuesta    : 27,3 ms (mediana de 7)
 
     {
-        "cuentaId":  117,
-        "saldo":  12180,
+        "cuentaId":  107,
+        "saldo":  10150,
         "moneda":  "CLP",
         "ultimos":  [
                         {
@@ -127,10 +127,10 @@
 --- GET /api/cajero/saldo
     campos de primer nivel : 2
     tamano de la respuesta : 40 bytes
-    tiempo de respuesta    : 11,2 ms (mediana de 7)
+    tiempo de respuesta    : 11,8 ms (mediana de 7)
 
     {
-        "saldoDisponible":  12180,
+        "saldoDisponible":  10150,
         "moneda":  "CLP"
     }
 
@@ -140,9 +140,9 @@
 
   canal          bytes   vs. web    tiempo   para que sirve
   --------------------------------------------------------------------------
-  web              927     100 %     35,3 ms   ficha completa con agregados
-  movil            318       34%     25,9 ms   saldo y ultimos movimientos
-  cajero            40        4%     11,2 ms   solo saldo disponible
+  web              927     100 %     31,3 ms   ficha completa con agregados
+  movil            318       34%     27,3 ms   saldo y ultimos movimientos
+  cajero            40        4%     11,8 ms   solo saldo disponible
 
   Los tres leen la MISMA cuenta del mismo modulo de dominio. La diferencia
   esta enteramente en el BFF: que consulta, que agrega y que expone.
@@ -163,9 +163,9 @@
 
   canal  endpoint                                   estado       bytes  autenticacion
   ----------------------------------------------------------------------------------------------------
-  web    GET  /api/web/cuentas                      200 OK       45802  JWT web (rol EJECUTIVO)
+  web    GET  /api/web/cuentas                      200 OK       45798  JWT web (rol EJECUTIVO)
   web    GET  /api/web/cuentas/{id}                 200 OK         927  JWT web
-  web    GET  /api/web/cuentas/{id}/estado-anual    200 OK        2884  JWT web
+  web    GET  /api/web/cuentas/{id}/estado-anual    200 OK        4906  JWT web
   web    GET  /api/web/transacciones                200 OK        1384  JWT web
   movil  GET  /api/movil/cuentas/{id}/resumen       200 OK         318  JWT movil
   movil  GET  /api/movil/cuentas/{id}/movimientos   200 OK         262  JWT movil
@@ -191,9 +191,31 @@
 
   monto no dispensable (7.500)               HTTP 400
   sobre el tope de la operacion (300.000)    HTTP 400
-  monto valido (10.000)                      AUTORIZADO             saldo restante: 2180
+  monto valido (10.000)                      AUTORIZADO             saldo restante: 150
 
   Las dos primeras reglas -multiplo de 10.000 y tope por operacion- son del
   CANAL y viven en el BFF del cajero. La validacion de saldo suficiente es del
   BANCO y vive en el modulo comun: cualquier canal futuro la hereda, mientras
   que las del cajero no se le imponen a nadie mas.
+
+==============================================================================
+ COHERENCIA ENTRE CANALES: UN RETIRO, TRES VISTAS
+==============================================================================
+
+  Retiro efectuado por el cajero: 10.000
+  Saldo antes / despues        : 10.150  ->  150
+
+  canal    endpoint consultado DESPUES del retiro                saldo
+  --------------------------------------------------------------------
+  web      GET /api/web/cuentas/107                                150
+  movil    GET /api/movil/cuentas/107/resumen                      150
+  cajero   GET /api/cajero/saldo                                   150
+
+  Los tres coinciden. Ninguno de los BFF sabe de la existencia de los otros
+  dos: lo que comparten es el modulo de dominio y la base, y cada uno decide
+  por su cuenta cuanto de eso expone y con que forma. Eso es el patron.
+
+  Notese que cada canal lo informa a SU manera y no todos exponen lo mismo:
+  el web lo entrega dentro de una ficha de 13 campos con agregados anuales,
+  el movil dentro de un resumen de 4, y el cajero solo, en 40 bytes. El dato
+  es uno; la representacion es del canal.

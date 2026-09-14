@@ -163,9 +163,35 @@ $cabecerasWeb = @{ Authorization = "Bearer $($loginWeb.token)" }
 
 if ($CuentaId -eq 0) {
     $cuentas = Invoke-RestMethod -Uri "$WEB/api/web/cuentas" -Headers $cabecerasWeb
-    # Se elige una con saldo suficiente para que el retiro del cajero se pueda
-    # demostrar autorizado y no rechazado por fondos.
-    $elegida = $cuentas | Where-Object { $_.saldo -ne $null } | Sort-Object saldo -Descending | Select-Object -First 1
+
+    # Dos condiciones, y la segunda importa mas de lo que parece.
+    #
+    #   saldo >= 10.000   para que el retiro del cajero se pueda demostrar
+    #                     AUTORIZADO y no rechazado por fondos insuficientes.
+    #   cantidadMovimientos > 0  para que la ficha del canal web muestre los
+    #                     agregados que calculo el batch de la Experiencia 1.
+    #
+    # Sin la segunda, ordenar solo por saldo caia en cuentas sin fila en
+    # MOVIMIENTO_ANUAL: la evidencia salia con cantidadMovimientos y
+    # totalDepositos en cero, y eso hacia parecer que el BFF no tiene de donde
+    # sacarlos cuando el punto es justamente el contrario. Contra Oracle solo
+    # 20 de las 50 cuentas traen esos agregados.
+    #
+    # Se ordena por cantidadMovimientos y no por saldo: entre las que sirven,
+    # la mejor para evidenciar es la que mas calculo heredado tiene.
+    $conAgregados = $cuentas |
+        Where-Object { $null -ne $_.saldo -and $_.saldo -ge 10000 -and $_.cantidadMovimientos -gt 0 } |
+        Sort-Object cantidadMovimientos -Descending
+
+    # Contra H2 NINGUNA cuenta tiene agregados, porque alli no corrio ningun
+    # batch. En ese caso se vuelve al criterio anterior y la evidencia lo
+    # muestra en cero, que es la verdad de ese montaje.
+    $elegida = if ($conAgregados) {
+        $conAgregados | Select-Object -First 1
+    } else {
+        $cuentas | Where-Object { $null -ne $_.saldo } | Sort-Object saldo -Descending | Select-Object -First 1
+    }
+
     $script:saldoInicial = [decimal]$elegida.saldo
     $CuentaId = $elegida.cuentaId
 }
@@ -489,9 +515,15 @@ if ($null -eq $script:montoRetirado) {
     }
 
     Registrar ""
+    # Las cifras salen de lo MEDIDO en esta misma corrida, no escritas a mano.
+    $camposWeb   = ($respuestaWeb   | Get-Member -MemberType NoteProperty).Count
+    $camposMovil = ($respuestaMovil | Get-Member -MemberType NoteProperty).Count
+    # Estaban fijas y decian 43 bytes; contra Oracle la respuesta del cajero
+    # mide 40, asi que el cierre contradecia a la tabla que tiene tres parrafos
+    # mas arriba en el mismo archivo.
     Registrar "  Notese que cada canal lo informa a SU manera y no todos exponen lo mismo:"
-    Registrar "  el web lo entrega dentro de una ficha de 13 campos con agregados anuales,"
-    Registrar "  el movil dentro de un resumen de 4, y el cajero solo, en 43 bytes. El dato"
+    Registrar ("  el web lo entrega dentro de una ficha de {0} campos con agregados anuales," -f $camposWeb)
+    Registrar ("  el movil dentro de un resumen de {0}, y el cajero solo, en {1} bytes. El dato" -f $camposMovil, $bytesCajero)
     Registrar "  es uno; la representacion es del canal."
 }
 

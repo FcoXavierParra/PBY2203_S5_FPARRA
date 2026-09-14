@@ -1,35 +1,35 @@
 ﻿==============================================================================
  PATRON BFF - LA MISMA CUENTA POR LOS TRES CANALES
 ==============================================================================
- Fecha: 2026-09-10 12:09:31
+ Fecha: 2026-09-14 10:22:31
  Motor: H2 en archivo, una sola base compartida por los tres BFF (montaje sin infraestructura)
- Cuenta de prueba: 146
+ Cuenta de prueba: 105
 
 ==============================================================================
  1. CANAL WEB  (:8081)   autenticacion: JWT tras login de 'ejecutivo'
 ==============================================================================
 
---- GET /api/web/cuentas/146
+--- GET /api/web/cuentas/105
     campos de primer nivel : 13
-    tamano de la respuesta : 979 bytes
-    tiempo de respuesta    : 9,3 ms (mediana de 7)
+    tamano de la respuesta : 953 bytes
+    tiempo de respuesta    : 8,8 ms (mediana de 7)
 
     {
-        "cuentaId":  146,
-        "titular":  "Charlie Green",
-        "tipoCuenta":  "desconocido",
-        "saldo":  12000.00,
-        "saldoFormateado":  "$12.000",
-        "edad":  100,
-        "segmentoEtario":  "senior",
-        "cantidadMovimientos":  0,
-        "totalDepositos":  0,
-        "totalRetiros":  0,
-        "montoPromedio":  0,
-        "observacionCalidad":  "tipo de cuenta no clasificado en el origen",
+        "cuentaId":  105,
+        "titular":  "Steve Rogers",
+        "tipoCuenta":  "ahorro",
+        "saldo":  10000.00,
+        "saldoFormateado":  "$10.000",
+        "edad":  35,
+        "segmentoEtario":  "adulto",
+        "cantidadMovimientos":  56,
+        "totalDepositos":  22900.00,
+        "totalRetiros":  22800.00,
+        "montoPromedio":  1210.71,
+        "observacionCalidad":  null,
         "movimientosRecientes":  [
                                      {
-                                         "id":  1000,
+                                         "id":  33,
                                          "fecha":  "2024-12-30",
                                          "monto":  1500.00,
                                          "montoFormateado":  "$1.500",
@@ -47,13 +47,13 @@
                                          "tipoDesconocido":  false
                                      },
                                      {
-                                         "id":  33,
+                                         "id":  957,
                                          "fecha":  "2024-12-30",
-                                         "monto":  1500.00,
-                                         "montoFormateado":  "$1.500",
-                                         "tipo":  "credito",
+                                         "monto":  700.00,
+                                         "montoFormateado":  "$700",
+                                         "tipo":  "desconocido",
                                          "anomalia":  false,
-                                         "tipoDesconocido":  false
+                                         "tipoDesconocido":  true
                                      },
                                      {
                                          "id":  589,
@@ -65,13 +65,13 @@
                                          "tipoDesconocido":  false
                                      },
                                      {
-                                         "id":  957,
+                                         "id":  1000,
                                          "fecha":  "2024-12-30",
-                                         "monto":  700.00,
-                                         "montoFormateado":  "$700",
-                                         "tipo":  "desconocido",
+                                         "monto":  1500.00,
+                                         "montoFormateado":  "$1.500",
+                                         "tipo":  "credito",
                                          "anomalia":  false,
-                                         "tipoDesconocido":  true
+                                         "tipoDesconocido":  false
                                      }
                                  ]
     }
@@ -80,25 +80,25 @@
  2. CANAL MOVIL  (:8082)   autenticacion: JWT tras registro del dispositivo
 ==============================================================================
 
---- GET /api/movil/cuentas/146/resumen
+--- GET /api/movil/cuentas/105/resumen
     campos de primer nivel : 4
     tamano de la respuesta : 340 bytes
-    tiempo de respuesta    : 10,2 ms (mediana de 7)
+    tiempo de respuesta    : 11,1 ms (mediana de 7)
 
     {
-        "cuentaId":  146,
-        "saldo":  12000.00,
+        "cuentaId":  105,
+        "saldo":  10000.00,
         "moneda":  "CLP",
         "ultimos":  [
                         {
                             "fecha":  "2024-12-30",
-                            "monto":  3000.00,
-                            "tipo":  "debito"
+                            "monto":  700.00,
+                            "tipo":  "desconocido"
                         },
                         {
                             "fecha":  "2024-12-30",
-                            "monto":  1500.00,
-                            "tipo":  "credito"
+                            "monto":  3000.00,
+                            "tipo":  "debito"
                         },
                         {
                             "fecha":  "2024-12-30",
@@ -112,8 +112,8 @@
                         },
                         {
                             "fecha":  "2024-12-30",
-                            "monto":  700.00,
-                            "tipo":  "desconocido"
+                            "monto":  1500.00,
+                            "tipo":  "credito"
                         }
                     ]
     }
@@ -127,10 +127,10 @@
 --- GET /api/cajero/saldo
     campos de primer nivel : 2
     tamano de la respuesta : 43 bytes
-    tiempo de respuesta    : 5,7 ms (mediana de 7)
+    tiempo de respuesta    : 7 ms (mediana de 7)
 
     {
-        "saldoDisponible":  12000.00,
+        "saldoDisponible":  10000.00,
         "moneda":  "CLP"
     }
 
@@ -140,9 +140,9 @@
 
   canal          bytes   vs. web    tiempo   para que sirve
   --------------------------------------------------------------------------
-  web              979     100 %      9,3 ms   ficha completa con agregados
-  movil            340       35%     10,2 ms   saldo y ultimos movimientos
-  cajero            43        4%      5,7 ms   solo saldo disponible
+  web              953     100 %      8,8 ms   ficha completa con agregados
+  movil            340       36%     11,1 ms   saldo y ultimos movimientos
+  cajero            43        5%        7 ms   solo saldo disponible
 
   Los tres leen la MISMA cuenta del mismo modulo de dominio. La diferencia
   esta enteramente en el BFF: que consulta, que agrega y que expone.
@@ -164,8 +164,8 @@
   canal  endpoint                                   estado       bytes  autenticacion
   ----------------------------------------------------------------------------------------------------
   web    GET  /api/web/cuentas                      200 OK       48614  JWT web (rol EJECUTIVO)
-  web    GET  /api/web/cuentas/{id}                 200 OK         979  JWT web
-  web    GET  /api/web/cuentas/{id}/estado-anual    200 OK         162  JWT web
+  web    GET  /api/web/cuentas/{id}                 200 OK         953  JWT web
+  web    GET  /api/web/cuentas/{id}/estado-anual    200 OK        5410  JWT web
   web    GET  /api/web/transacciones                200 OK        1418  JWT web
   movil  GET  /api/movil/cuentas/{id}/resumen       200 OK         340  JWT movil
   movil  GET  /api/movil/cuentas/{id}/movimientos   200 OK         281  JWT movil
@@ -191,7 +191,7 @@
 
   monto no dispensable (7.500)               HTTP 400
   sobre el tope de la operacion (300.000)    HTTP 400
-  monto valido (10.000)                      AUTORIZADO             saldo restante: 2000,00
+  monto valido (10.000)                      AUTORIZADO             saldo restante: 0,00
 
   Las dos primeras reglas -multiplo de 10.000 y tope por operacion- son del
   CANAL y viven en el BFF del cajero. La validacion de saldo suficiente es del
@@ -203,13 +203,13 @@
 ==============================================================================
 
   Retiro efectuado por el cajero: 10.000
-  Saldo antes / despues        : 12.000  ->  2.000
+  Saldo antes / despues        : 10.000  ->  0
 
   canal    endpoint consultado DESPUES del retiro                saldo
   --------------------------------------------------------------------
-  web      GET /api/web/cuentas/146                              2.000
-  movil    GET /api/movil/cuentas/146/resumen                    2.000
-  cajero   GET /api/cajero/saldo                                 2.000
+  web      GET /api/web/cuentas/105                                  0
+  movil    GET /api/movil/cuentas/105/resumen                        0
+  cajero   GET /api/cajero/saldo                                     0
 
   Los tres coinciden. Ninguno de los BFF sabe de la existencia de los otros
   dos: lo que comparten es el modulo de dominio y la base, y cada uno decide
